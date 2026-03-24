@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JBA Tracker v2</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+<style>
+/* ════════════════════════════════════════════
+   RESET & TOKENS
+════════════════════════════════════════════ */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+  --bg:        #0b0d12;
+  --bg2:       #0f1219;
+  --surface:   #141820;
+  --card:      #1c2130;
+  --card2:     #222840;
+  --border:    rgba(255,255,255,0.06);
+  --border2:   rgba(255,255,255,0.11);
+  --text:      #eef0f7;
+  --sub:       #7c87a0;
+  --faint:     #333a4d;
+  --brand:     #3b82f6;
+  --brand2:    #60a5fa;
+  --green:     #22c55e;
+  --green2:    #4ade80;
+  --amber:     #f59e0b;
+  --amber2:    #fbbf24;
+  --red:       #ef4444;
+  --red2:      #f87171;
+  --teal:      #14b8a6;
+  --teal2:     #2dd4bf;
+  --gold:      #f5c842;
+  --purple:    #a855f7;
+
+  --sidebar-w: 300px;
+  --topbar-h:  54px;
+}
+
+html, body {
+  width:100%; height:100%;
+  overflow:hidden;
+  background:var(--bg);
+  color:var(--text);
+  font-family:'DM Sans', sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ════════════════════════════════════════════
+   ROOT LAYOUT
+════════════════════════════════════════════ */
+#app { display:flex; flex-direction:column; width:100vw; height:100vh; }
+
+/* ════════════════════════════════════════════
+   TOPBAR
+════════════════════════════════════════════ */
+#topbar {
+  height: var(--topbar-h);
+  flex-shrink:0;
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  display:flex;
+  align-items:center;
+  padding:0 16px;
+  gap:12px;
+  z-index:300;
+}
+
+.logo {
+  font-family:'Syne',sans-serif;
+  font-size:17px; font-weight:800;
+  letter-spacing:-0.3px;
+  display:flex; align-items:center; gap:8px;
+}
+.logo-mark {
+  width:28px; height:28px; border-radius:7px;
+  background:var(--brand);
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:800; color:#fff;
+}
+.logo em { font-style:normal; color:var(--brand2); }
+
+.vsep { width:1px; height:22px; background:var(--border); flex-shrink:0; }
+
+/* stat chips */
+.chip {
+  display:flex; align-items:center; gap:5px;
+  background:var(--card); border:1px solid var(--border);
+  border-radius:7px; padding:4px 10px;
+  font-size:12px; color:var(--sub); white-space:nowrap;
+}
+.chip b { font-weight:600; color:var(--text); margin-left:1px; }
+.chip.g b { color:var(--green2); }
+.chip.a b { color:var(--amber2); }
+.chip.r b { color:var(--red2); }
+
+/* alert bell */
+.alert-bell {
+  position:relative;
+  display:flex; align-items:center; justify-content:center;
+  width:34px; height:34px; border-radius:8px;
+  background:var(--card); border:1px solid var(--border);
+  cursor:pointer; font-size:16px; transition:all 0.2s;
+}
+.alert-bell:hover { border-color:var(--border2); }
+.alert-bell.has-alert { border-color:rgba(239,68,68,0.4); background:rgba(239,68,68,0.08); }
+.alert-dot {
+  position:absolute; top:4px; right:4px;
+  width:8px; height:8px; border-radius:50%;
+  background:var(--red); border:2px solid var(--surface);
+  display:none; animation:blink 1.5s infinite;
+}
+.alert-bell.has-alert .alert-dot { display:block; }
+
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.topbar-right { margin-left:auto; display:flex; align-items:center; gap:8px; }
+
+.ws-pill {
+  display:flex; align-items:center; gap:6px;
+  padding:4px 10px; border-radius:7px;
+  border:1px solid var(--border); background:var(--card);
+  font-size:12px; color:var(--sub); transition:all 0.3s;
+}
+.ws-pill.on { border-color:rgba(34,197,94,0.3); color:var(--green2); }
+.wdot { width:6px; height:6px; border-radius:50%; background:var(--faint); flex-shrink:0; }
+.ws-pill.on .wdot { background:var(--green2); box-shadow:0 0 6px var(--green2); animation:blink 2s infinite; }
+
+.icon-btn {
+  padding:5px 12px; border-radius:7px;
+  border:1px solid var(--border); background:var(--card);
+  color:var(--sub); font-family:'DM Sans',sans-serif;
+  font-size:12px; font-weight:500; cursor:pointer;
+  transition:all 0.2s; white-space:nowrap;
+}
+.icon-btn:hover { border-color:var(--border2); color:var(--text); }
+
+/* ════════════════════════════════════════════
+   BODY
+════════════════════════════════════════════ */
+#body { flex:1; min-height:0; display:flex; }
+
+/* ════════════════════════════════════════════
+   SIDEBAR
+════════════════════════════════════════════ */
+#sidebar {
+  width:var(--sidebar-w);
+  flex-shrink:0;
+  background:var(--surface);
+  border-right:1px solid var(--border);
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  z-index:200;
+}
+
+.sb-head {
+  padding:14px 16px 10px;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+
+.sb-head-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.sb-title { font-family:'Syne',sans-serif; font-size:13px; font-weight:800; }
+.sb-count { font-size:11px; color:var(--sub); background:var(--card); border:1px solid var(--border); padding:2px 8px; border-radius:6px; }
+
+.sb-search input {
+  width:100%; background:var(--card); border:1px solid var(--border);
+  border-radius:8px; padding:8px 12px; color:var(--text);
+  font-family:'DM Sans',sans-serif; font-size:13px; outline:none;
+  transition:border-color 0.2s;
+}
+.sb-search input:focus { border-color:rgba(59,130,246,0.4); }
+.sb-search input::placeholder { color:var(--faint); }
+
+/* Tab row */
+.sb-tabs {
+  display:flex; border-bottom:1px solid var(--border); flex-shrink:0;
+}
+.sb-tab {
+  flex:1; padding:9px 0; font-size:12px; font-weight:500;
+  text-align:center; cursor:pointer; color:var(--sub);
+  border-bottom:2px solid transparent; transition:all 0.2s;
+}
+.sb-tab.active { color:var(--brand2); border-bottom-color:var(--brand); }
+
+.sb-list {
+  flex:1; overflow-y:auto; min-height:0;
+}
+.sb-list::-webkit-scrollbar { width:3px; }
+.sb-list::-webkit-scrollbar-thumb { background:var(--faint); border-radius:2px; }
+
+/* ── Inspector card ── */
+.insp-card {
+  padding:13px 16px;
+  border-bottom:1px solid var(--border);
+  cursor:pointer;
+  transition:background 0.15s;
+  border-left:3px solid transparent;
+  position:relative;
+}
+.insp-card:hover { background:rgba(255,255,255,0.02); }
+.insp-card.sel   { background:rgba(59,130,246,0.06); border-left-color:var(--brand); }
+.insp-card.alert { border-left-color:var(--red); }
+
+.ic-row1 { display:flex; align-items:center; justify-content:space-between; margin-bottom:5px; }
+.ic-name { font-family:'Syne',sans-serif; font-size:13px; font-weight:800; }
+
+.ic-badge {
+  font-size:10px; font-weight:600;
+  padding:2px 8px; border-radius:12px;
+  border:1px solid;
+}
+.ic-badge.live  { background:rgba(34,197,94,0.1);  color:var(--green2); border-color:rgba(34,197,94,0.25); }
+.ic-badge.slow  { background:rgba(245,158,11,0.1); color:var(--amber2); border-color:rgba(245,158,11,0.25); }
+.ic-badge.stale { background:rgba(239,68,68,0.1);  color:var(--red2);   border-color:rgba(239,68,68,0.25); }
+
+.ic-row2 { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+.ic-id   { font-size:11px; color:var(--sub); }
+
+/* mini order bar */
+.ic-orders {
+  display:flex; align-items:center; gap:5px;
+  font-family:'DM Mono',monospace; font-size:11px;
+}
+.ord-done  { color:var(--green2); }
+.ord-sep   { color:var(--faint); }
+.ord-total { color:var(--sub); }
+
+.ic-coords { font-family:'DM Mono',monospace; font-size:11px; color:var(--teal2); }
+.ic-row3   { display:flex; align-items:center; justify-content:space-between; margin-top:3px; }
+.ic-ago    { font-size:10px; color:var(--faint); }
+
+/* stopped warning inside card */
+.ic-alert-tag {
+  font-size:10px; font-weight:600;
+  color:var(--red2); background:rgba(239,68,68,0.1);
+  padding:1px 7px; border-radius:5px;
+  border:1px solid rgba(239,68,68,0.25);
+  display:none;
+}
+.insp-card.alert .ic-alert-tag { display:inline-flex; align-items:center; gap:3px; }
+
+/* progress bar */
+.ic-progress {
+  margin-top:7px;
+  height:3px; border-radius:2px;
+  background:var(--faint); overflow:hidden;
+}
+.ic-progress-fill { height:100%; border-radius:2px; background:var(--green); transition:width 0.5s; }
+
+/* ── Alert tab ── */
+.alert-item {
+  padding:12px 16px;
+  border-bottom:1px solid var(--border);
+  display:flex; gap:10px; align-items:flex-start;
+}
+.ai-icon { font-size:18px; flex-shrink:0; margin-top:1px; }
+.ai-body {}
+.ai-title { font-size:13px; font-weight:600; color:var(--red2); margin-bottom:2px; }
+.ai-sub   { font-size:12px; color:var(--sub); line-height:1.5; }
+.ai-ts    { font-size:10px; color:var(--faint); margin-top:3px; }
+
+.no-alerts {
+  padding:30px 16px; text-align:center;
+  color:var(--faint); font-size:13px;
+  display:flex; flex-direction:column; align-items:center; gap:8px;
+}
+
+/* empty inspectors */
+.empty {
+  padding:36px 20px; text-align:center;
+  display:flex; flex-direction:column; align-items:center; gap:10px;
+}
+.empty-icon  { font-size:30px; }
+.empty-title { font-family:'Syne',sans-serif; font-size:14px; color:var(--text); }
+.empty-sub   { font-size:12px; color:var(--sub); line-height:1.7; max-width:220px; }
+.sim-btn {
+  padding:8px 16px; border-radius:8px;
+  border:1px solid var(--border2); background:var(--card);
+  color:var(--teal2); font-family:'DM Sans',sans-serif;
+  font-size:12px; font-weight:500; cursor:pointer; transition:all 0.2s;
+}
+.sim-btn:hover { border-color:var(--teal); }
+
+/* ════════════════════════════════════════════
+   MAP
+════════════════════════════════════════════ */
+#map-wrap { flex:1; min-width:0; position:relative; }
+#map      { position:absolute; inset:0; }
+
+/* Map overlay controls */
+.map-ctrl {
+  position:absolute; top:12px; z-index:10;
+  display:flex; gap:6px;
+}
+.map-ctrl.left  { left:12px; }
+.map-ctrl.right { right:52px; }
+
+.map-btn {
+  padding:6px 12px; border-radius:7px;
+  background:var(--surface); border:1px solid var(--border);
+  color:var(--sub); font-family:'DM Mono',monospace;
+  font-size:11px; cursor:pointer; transition:all 0.2s;
+  white-space:nowrap;
+}
+.map-btn:hover { border-color:var(--border2); color:var(--text); }
+.map-btn.on    { border-color:var(--teal); color:var(--teal2); }
+.map-btn.on-brand { border-color:var(--brand); color:var(--brand2); }
+
+/* ── Detail panel ── */
+#detail {
+  position:absolute; bottom:20px; right:20px; z-index:20;
+  width:270px; background:var(--surface);
+  border:1px solid var(--border2); border-radius:14px;
+  overflow:hidden; display:none;
+  animation:panel-in 0.25s cubic-bezier(0.16,1,0.3,1);
+}
+@keyframes panel-in { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+.dp-head {
+  padding:12px 16px; background:var(--card);
+  border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:8px;
+}
+.dp-avatar {
+  width:32px; height:32px; border-radius:50%;
+  background:linear-gradient(135deg,var(--brand),var(--brand2));
+  display:flex; align-items:center; justify-content:center;
+  font-size:13px; font-weight:700; color:#fff; flex-shrink:0;
+}
+.dp-info { flex:1; min-width:0; }
+.dp-name { font-family:'Syne',sans-serif; font-size:13px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dp-id   { font-size:11px; color:var(--sub); }
+.dp-close { background:none; border:none; color:var(--sub); cursor:pointer; font-size:16px; padding:2px 5px; border-radius:5px; transition:color 0.2s; line-height:1; }
+.dp-close:hover { color:var(--text); }
+
+.dp-body { padding:12px 16px; display:flex; flex-direction:column; gap:7px; }
+
+.dp-row { display:flex; justify-content:space-between; align-items:center; }
+.dp-k   { font-size:10px; letter-spacing:0.7px; text-transform:uppercase; color:var(--sub); }
+.dp-v   { font-family:'DM Mono',monospace; font-size:12px; color:var(--brand2); }
+.dp-v.g { color:var(--green2); }
+.dp-v.a { color:var(--amber2); }
+.dp-v.r { color:var(--red2); }
+.dp-v.go{ color:var(--gold); }
+
+/* order progress in detail */
+.dp-prog-wrap { margin-top:2px; }
+.dp-prog-label { display:flex; justify-content:space-between; font-size:11px; color:var(--sub); margin-bottom:5px; }
+.dp-prog-label b { color:var(--text); }
+.dp-prog-bar { height:5px; background:var(--faint); border-radius:3px; overflow:hidden; }
+.dp-prog-fill { height:100%; border-radius:3px; background:linear-gradient(90deg,var(--brand),var(--teal)); transition:width 0.5s; }
+
+/* route history btn in detail */
+.dp-route-btn {
+  margin-top:4px; width:100%; padding:8px;
+  border-radius:8px; border:1px solid var(--border2);
+  background:var(--card); color:var(--teal2);
+  font-family:'DM Sans',sans-serif; font-size:12px; font-weight:500;
+  cursor:pointer; transition:all 0.2s; text-align:center;
+}
+.dp-route-btn:hover { border-color:var(--teal); background:rgba(20,184,166,0.08); }
+.dp-route-btn.active { background:rgba(20,184,166,0.12); border-color:var(--teal); color:var(--teal2); }
+
+/* ── Mapbox overrides ── */
+.mapboxgl-ctrl-group { background:var(--surface) !important; border:1px solid var(--border) !important; }
+.mapboxgl-ctrl-group button { background:var(--surface) !important; }
+.mapboxgl-ctrl-icon { filter:invert(0.6); }
+.mapboxgl-popup-content {
+  background:var(--surface) !important; border:1px solid var(--border2) !important;
+  border-radius:10px !important; padding:12px 14px !important;
+  font-family:'DM Sans',sans-serif !important; font-size:13px !important;
+  color:var(--text) !important; box-shadow:0 8px 24px rgba(0,0,0,0.5) !important;
+}
+.mapboxgl-popup-tip { display:none !important; }
+.pu-name { font-family:'Syne',sans-serif; font-size:13px; font-weight:800; color:var(--gold); margin-bottom:5px; }
+.pu-row  { color:var(--sub); font-size:12px; margin-bottom:2px; }
+.pu-row span { color:var(--text); }
+
+/* ── Stopped marker ring ── */
+@keyframes stopped-ring {
+  0%   { box-shadow:0 0 0 0 rgba(239,68,68,0.6); }
+  70%  { box-shadow:0 0 0 10px rgba(239,68,68,0); }
+  100% { box-shadow:0 0 0 0 rgba(239,68,68,0); }
+}
+@keyframes m-pulse {
+  0%   { transform:scale(1);   opacity:0.7; }
+  50%  { transform:scale(1.6); opacity:0.15; }
+  100% { transform:scale(1);   opacity:0.7; }
+}
+
+/* ════════════════════════════════════════════
+   CONFIG MODAL
+════════════════════════════════════════════ */
+#modal-bg {
+  position:fixed; inset:0; z-index:999;
+  background:rgba(0,0,0,0.7); backdrop-filter:blur(8px);
+  display:flex; align-items:center; justify-content:center;
+}
+#modal-bg.hidden { display:none; }
+
+.modal {
+  background:var(--surface); border:1px solid var(--border2);
+  border-radius:16px; padding:28px; width:440px; max-width:94vw;
+  display:flex; flex-direction:column; gap:18px;
+  animation:panel-in 0.3s cubic-bezier(0.16,1,0.3,1);
+}
+.modal-title { font-family:'Syne',sans-serif; font-size:19px; font-weight:800; }
+.modal-sub   { font-size:13px; color:var(--sub); line-height:1.7; }
+
+.m-field { display:flex; flex-direction:column; gap:7px; }
+.m-field label { font-size:11px; letter-spacing:0.8px; text-transform:uppercase; color:var(--sub); font-weight:500; }
+.m-field input {
+  background:var(--card); border:1px solid var(--border);
+  border-radius:8px; padding:11px 14px;
+  color:var(--text); font-family:'DM Mono',monospace; font-size:13px; outline:none;
+  transition:border-color 0.2s;
+}
+.m-field input:focus { border-color:rgba(59,130,246,0.4); }
+
+.modal-code {
+  background:var(--bg); border:1px solid var(--border);
+  border-radius:8px; padding:14px;
+  font-family:'DM Mono',monospace; font-size:11px;
+  color:var(--sub); line-height:1.9; white-space:pre-wrap;
+}
+
+.m-btns { display:flex; gap:10px; }
+.m-btn {
+  flex:1; padding:11px; border-radius:8px; cursor:pointer;
+  font-family:'DM Sans',sans-serif; font-size:14px; font-weight:600;
+  border:none; transition:all 0.2s;
+}
+.m-btn:active { transform:scale(0.97); }
+.m-btn.primary { background:var(--brand); color:#fff; box-shadow:0 4px 16px rgba(59,130,246,0.3); }
+.m-btn.ghost   { background:var(--card); color:var(--sub); border:1px solid var(--border); }
+
+/* ── Orders input modal ── */
+#orders-modal {
+  position:fixed; inset:0; z-index:999;
+  background:rgba(0,0,0,0.7); backdrop-filter:blur(8px);
+  display:flex; align-items:center; justify-content:center;
+}
+#orders-modal.hidden { display:none; }
+
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ══ TOPBAR ══════════════════════════════════════ -->
+<div id="topbar">
+  <div class="logo">
+    <div class="logo-mark">JBA</div>
+    <span>Track <em>v2</em></span>
+  </div>
+  <div class="vsep"></div>
+  <div class="chip g">Ativos <b id="s-active">0</b></div>
+  <div class="chip">Total <b id="s-total">0</b></div>
+  <div class="chip a">Parados <b id="s-stopped">0</b></div>
+  <div class="topbar-right">
+    <div class="alert-bell" id="alert-bell" onclick="switchTab('alerts')" title="Alertas">
+      🔔<div class="alert-dot"></div>
+    </div>
+    <div class="ws-pill" id="ws-pill"><div class="wdot"></div><span id="ws-txt">Desconectado</span></div>
+    <button class="icon-btn" onclick="openModal()">⚙ Config</button>
+  </div>
+</div>
+
+<!-- ══ BODY ════════════════════════════════════════ -->
+<div id="body">
+
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div class="sb-head">
+      <div class="sb-head-row">
+        <div class="sb-title">Field Inspectors</div>
+        <div class="sb-count" id="sb-count">0</div>
+      </div>
+      <div class="sb-search">
+        <input type="text" id="search" placeholder="🔍  Buscar inspetor..." oninput="renderList()">
+      </div>
+    </div>
+
+    <div class="sb-tabs">
+      <div class="sb-tab active" id="tab-inspectors" onclick="switchTab('inspectors')">Inspetores</div>
+      <div class="sb-tab" id="tab-alerts" onclick="switchTab('alerts')">
+        Alertas <span id="alert-tab-count" style="display:none;margin-left:4px;background:var(--red);color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;font-weight:700;">0</span>
+      </div>
+    </div>
+
+    <!-- Inspectors list -->
+    <div class="sb-list" id="sb-list">
+      <div class="empty" id="empty-state">
+        <div class="empty-icon">📡</div>
+        <div class="empty-title">Sem inspetores</div>
+        <div class="empty-sub">Configure o servidor ou use a simulação para testar.</div>
+        <button class="sim-btn" onclick="runDemo()">▶ Simular Demo</button>
+      </div>
+    </div>
+
+    <!-- Alerts list (hidden by default) -->
+    <div class="sb-list" id="alert-list" style="display:none">
+      <div class="no-alerts" id="no-alerts">
+        <div style="font-size:24px">✅</div>
+        <div>Nenhum alerta ativo</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAP -->
+  <div id="map-wrap">
+    <div id="map"></div>
+
+    <!-- Map controls top-right -->
+    <div class="map-ctrl right">
+      <button class="map-btn" id="trail-btn" onclick="toggleTrails()">🛤 Trilhas OFF</button>
+      <button class="map-btn" id="fit-btn" onclick="fitAll()">⊞ Ver Todos</button>
+    </div>
+
+    <!-- Detail panel -->
+    <div id="detail">
+      <div class="dp-head">
+        <div class="dp-avatar" id="dp-avatar">?</div>
+        <div class="dp-info">
+          <div class="dp-name" id="dp-name">—</div>
+          <div class="dp-id"   id="dp-id-sub">—</div>
+        </div>
+        <button class="dp-close" onclick="closeDetail()">✕</button>
+      </div>
+      <div class="dp-body">
+        <div class="dp-row"><div class="dp-k">Status</div><div class="dp-v g" id="dp-status">—</div></div>
+        <div class="dp-row"><div class="dp-k">Latitude</div><div class="dp-v" id="dp-lat">—</div></div>
+        <div class="dp-row"><div class="dp-k">Longitude</div><div class="dp-v" id="dp-lng">—</div></div>
+        <div class="dp-row"><div class="dp-k">Precisão GPS</div><div class="dp-v g" id="dp-acc">—</div></div>
+        <div class="dp-row"><div class="dp-k">Velocidade</div><div class="dp-v" id="dp-spd">—</div></div>
+        <div class="dp-row"><div class="dp-k">Último sinal</div><div class="dp-v a" id="dp-ago">—</div></div>
+
+        <div class="dp-prog-wrap">
+          <div class="dp-prog-label">
+            <span>Ordens do dia</span>
+            <span><b id="dp-done">0</b> / <span id="dp-total">0</span></span>
+          </div>
+          <div class="dp-prog-bar">
+            <div class="dp-prog-fill" id="dp-prog" style="width:0%"></div>
+          </div>
+        </div>
+
+        <button class="dp-route-btn" id="dp-route-btn" onclick="toggleRoute()">
+          🛤 Ver histórico de rota
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- #body -->
+</div><!-- #app -->
+
+<!-- ══ CONFIG MODAL ════════════════════════════════ -->
+<div id="modal-bg" class="hidden">
+  <div class="modal">
+    <div class="modal-title">⚙ Configuração</div>
+    <div class="modal-sub">URL do servidor WebSocket. Use o mesmo endereço no App do Inspetor.</div>
+    <div class="m-field">
+      <label>WebSocket Server URL</label>
+      <input type="text" id="srv-url" placeholder="wss://meu-servidor.onrender.com">
+    </div>
+    <div class="m-field">
+      <label>Tempo parado para alerta (minutos)</label>
+      <input type="number" id="stop-thresh" value="10" min="2" max="60">
+    </div>
+    <div class="modal-code">// Backend Node.js — deploy grátis no Render.com
+const wss = new (require('ws').Server)({ port: process.env.PORT });
+wss.on('connection', s => {
+  s.on('message', d => {
+    wss.clients.forEach(c => c.readyState === 1 && c.send(d));
+  });
+});</div>
+    <div class="m-btns">
+      <button class="m-btn ghost" onclick="closeModal()">Cancelar</button>
+      <button class="m-btn primary" onclick="saveConfig()">Salvar →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ORDERS MODAL ════════════════════════════════ -->
+<div id="orders-modal" class="hidden">
+  <div class="modal">
+    <div class="modal-title">📋 Ordens do Dia</div>
+    <div class="modal-sub">Defina quantas ordens foram atribuídas e quantas já foram concluídas para <b id="om-name">—</b>.</div>
+    <div class="m-field">
+      <label>Ordens Atribuídas (total do dia)</label>
+      <input type="number" id="om-total" value="10" min="0" max="99">
+    </div>
+    <div class="m-field">
+      <label>Ordens Concluídas</label>
+      <input type="number" id="om-done" value="0" min="0" max="99">
+    </div>
+    <div class="m-btns">
+      <button class="m-btn ghost" onclick="closeOrdersModal()">Cancelar</button>
+      <button class="m-btn primary" onclick="saveOrders()">Salvar →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════
+// MAPBOX INIT
+// ════════════════════════════════════════════════════════
+mapboxgl.accessToken = 'pk.eyJ1IjoiNDU0NTk5IiwiYSI6ImNtZmUzYXk4aDAybGQybHBzZnRxZWUyZ3oifQ.fcyLuSVuWovFRwa7tP6KXg';
+
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/dark-v11',
+  center: [-90, 38],
+  zoom: 4
+});
+map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+// ════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════
+const inspectors = {};
+// inspectors[id] = {
+//   data: { lat, lng, accuracy, speed, timestamp, inspectorName, inspectorId, zone }
+//   marker, circle,
+//   trail: [[lng,lat], ...]
+//   orders: { total: N, done: N }
+//   stopTimer: null,  stopAlerted: false
+// }
+
+let selectedId   = null;
+let showTrails   = false;
+let routeShownId = null;   // which inspector's route is drawn
+let ws           = null;
+let alerts       = [];     // { id, name, msg, ts }
+let stopThresh   = 10;     // minutes
+let activeTab    = 'inspectors';
+let ordersEditId = null;
+
+// ════════════════════════════════════════════════════════
+// WEBSOCKET
+// ════════════════════════════════════════════════════════
+function connectWS(url) {
+  if (ws) { ws.onclose = null; ws.close(); }
+  try {
+    ws = new WebSocket(url);
+    ws.onopen    = () => setWs(true);
+    ws.onclose   = () => { setWs(false); setTimeout(() => connectWS(url), 8000); };
+    ws.onerror   = () => {};
+    ws.onmessage = e => {
+      try { const d = JSON.parse(e.data); if (d.type === 'location') handleLoc(d); } catch {}
+    };
+  } catch { setWs(false); }
+}
+
+function setWs(on) {
+  const p = document.getElementById('ws-pill');
+  p.className = 'ws-pill' + (on ? ' on' : '');
+  document.getElementById('ws-txt').textContent = on ? 'Conectado' : 'Desconectado';
+}
+
+function saveConfig() {
+  const url = document.getElementById('srv-url').value.trim();
+  stopThresh = parseInt(document.getElementById('stop-thresh').value) || 10;
+  localStorage.setItem('jba_srv', url);
+  localStorage.setItem('jba_thresh', stopThresh);
+  if (url) connectWS(url);
+  closeModal();
+}
+
+function openModal()  { document.getElementById('modal-bg').classList.remove('hidden'); }
+function closeModal() { document.getElementById('modal-bg').classList.add('hidden'); }
+
+window.addEventListener('load', () => {
+  const saved = localStorage.getItem('jba_srv');
+  stopThresh  = parseInt(localStorage.getItem('jba_thresh')) || 10;
+  document.getElementById('stop-thresh').value = stopThresh;
+  if (saved) { document.getElementById('srv-url').value = saved; connectWS(saved); }
+  else setTimeout(openModal, 500);
+});
+
+// ════════════════════════════════════════════════════════
+// LOCATION HANDLER
+// ════════════════════════════════════════════════════════
+function handleLoc(d) {
+  const id = d.inspectorId;
+  document.getElementById('empty-state').style.display = 'none';
+
+  if (!inspectors[id]) {
+    inspectors[id] = {
+      data: d,
+      trail: [],
+      orders: { total: 8, done: 0 },
+      stopTimer: null,
+      stopAlerted: false
+    };
+    createMarker(id, d);
+  } else {
+    inspectors[id].data = d;
+    inspectors[id].marker.setLngLat([d.lng, d.lat]);
+    flashMarker(id);
+    // reset stop alert on new movement
+    if (inspectors[id].stopAlerted) {
+      inspectors[id].stopAlerted = false;
+      removeAlert(id);
+    }
+    resetStopTimer(id);
+  }
+
+  inspectors[id].trail.push([d.lng, d.lat]);
+  // cap trail at 500 points
+  if (inspectors[id].trail.length > 500) inspectors[id].trail.shift();
+
+  if (showTrails) drawTrail(id);
+  if (routeShownId === id) updateRouteLayer(id);
+
+  renderList();
+  updateStats();
+  if (selectedId === id) updateDetail(inspectors[id]);
+}
+
+// ════════════════════════════════════════════════════════
+// STOP TIMER  (alert if no update for X minutes)
+// ════════════════════════════════════════════════════════
+function resetStopTimer(id) {
+  if (inspectors[id].stopTimer) clearTimeout(inspectors[id].stopTimer);
+  inspectors[id].stopTimer = setTimeout(() => triggerStopAlert(id), stopThresh * 60 * 1000);
+}
+
+function triggerStopAlert(id) {
+  if (!inspectors[id] || inspectors[id].stopAlerted) return;
+  inspectors[id].stopAlerted = true;
+  const name = inspectors[id].data.inspectorName || id;
+  addAlert(id, name, `Parado há mais de ${stopThresh} min — sem atualização de localização.`);
+  // red ring on marker
+  if (inspectors[id].circle) {
+    inspectors[id].circle.style.background = 'linear-gradient(135deg,#ef4444,#f87171)';
+    inspectors[id].circle.style.animation  = 'stopped-ring 1.5s infinite';
+  }
+  renderList();
+  updateStats();
+}
+
+// ════════════════════════════════════════════════════════
+// ALERTS
+// ════════════════════════════════════════════════════════
+function addAlert(id, name, msg) {
+  alerts = alerts.filter(a => a.id !== id); // remove existing for same inspector
+  alerts.unshift({ id, name, msg, ts: new Date() });
+  renderAlerts();
+}
+
+function removeAlert(id) {
+  alerts = alerts.filter(a => a.id !== id);
+  renderAlerts();
+}
+
+function renderAlerts() {
+  const count = alerts.length;
+  const bell  = document.getElementById('alert-bell');
+  const tabBadge = document.getElementById('alert-tab-count');
+
+  bell.className = 'alert-bell' + (count > 0 ? ' has-alert' : '');
+  tabBadge.textContent = count;
+  tabBadge.style.display = count > 0 ? 'inline' : 'none';
+
+  const list    = document.getElementById('alert-list');
+  const noAlert = document.getElementById('no-alerts');
+  list.querySelectorAll('.alert-item').forEach(e => e.remove());
+
+  if (count === 0) { noAlert.style.display = 'flex'; return; }
+  noAlert.style.display = 'none';
+
+  alerts.forEach(a => {
+    const el = document.createElement('div');
+    el.className = 'alert-item';
+    el.innerHTML = `
+      <div class="ai-icon">🚨</div>
+      <div class="ai-body">
+        <div class="ai-title">${a.name}</div>
+        <div class="ai-sub">${a.msg}</div>
+        <div class="ai-ts">${a.ts.toLocaleTimeString('pt-BR')}</div>
+      </div>
+    `;
+    el.onclick = () => { selectInspector(a.id); switchTab('inspectors'); };
+    list.appendChild(el);
+  });
+}
+
+// ════════════════════════════════════════════════════════
+// MARKERS
+// ════════════════════════════════════════════════════════
+function createMarker(id, d) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:relative;width:38px;height:38px;cursor:pointer;';
+
+  const pulse = document.createElement('div');
+  pulse.style.cssText = `
+    position:absolute;inset:-7px;border-radius:50%;
+    border:2px solid rgba(59,130,246,0.4);
+    animation:m-pulse 2.5s ease-in-out infinite;pointer-events:none;
+  `;
+
+  const circle = document.createElement('div');
+  circle.style.cssText = `
+    width:38px;height:38px;border-radius:50%;
+    background:linear-gradient(135deg,#3b82f6,#60a5fa);
+    border:2px solid rgba(255,255,255,0.2);
+    box-shadow:0 4px 14px rgba(59,130,246,0.45);
+    display:flex;align-items:center;justify-content:center;
+    font-size:14px;font-weight:700;color:#fff;
+    font-family:'DM Sans',sans-serif;
+    transition:transform 0.3s,background 0.5s;
+    user-select:none;
+  `;
+  circle.textContent = (d.inspectorName || 'I').charAt(0).toUpperCase();
+
+  wrap.appendChild(pulse);
+  wrap.appendChild(circle);
+  wrap.addEventListener('click', () => selectInspector(id));
+
+  const marker = new mapboxgl.Marker({ element: wrap, anchor: 'center' })
+    .setLngLat([d.lng, d.lat])
+    .addTo(map);
+
+  inspectors[id].marker = marker;
+  inspectors[id].circle = circle;
+  inspectors[id].wrap   = wrap;
+
+  resetStopTimer(id);
+}
+
+function flashMarker(id) {
+  const c = inspectors[id]?.circle;
+  if (!c) return;
+  c.style.transform = 'scale(1.3)';
+  setTimeout(() => { c.style.transform = 'scale(1)'; }, 350);
+}
+
+// ════════════════════════════════════════════════════════
+// TRAILS & ROUTE HISTORY
+// ════════════════════════════════════════════════════════
+function toggleTrails() {
+  showTrails = !showTrails;
+  const btn = document.getElementById('trail-btn');
+  btn.textContent = showTrails ? '🛤 Trilhas ON' : '🛤 Trilhas OFF';
+  btn.className   = 'map-btn' + (showTrails ? ' on' : '');
+
+  if (showTrails) {
+    Object.keys(inspectors).forEach(drawTrail);
+  } else {
+    Object.keys(inspectors).forEach(id => {
+      if (id === routeShownId) return; // keep selected route
+      removeLayer('trail-' + id);
+    });
+  }
+}
+
+function drawTrail(id) {
+  const sid    = 'trail-' + id;
+  const coords = inspectors[id].trail;
+  if (coords.length < 2) return;
+  const geo = { type:'Feature', geometry:{ type:'LineString', coordinates: coords }};
+  if (map.getSource(sid)) { map.getSource(sid).setData(geo); return; }
+  map.addSource(sid, { type:'geojson', data: geo });
+  map.addLayer({ id: sid, type:'line', source: sid, paint:{
+    'line-color':'#60a5fa','line-width':1.5,'line-opacity':0.35,'line-dasharray':[2,3]
+  }});
+}
+
+// Route history for selected inspector (full colored line)
+function toggleRoute() {
+  const btn = document.getElementById('dp-route-btn');
+  if (routeShownId === selectedId) {
+    removeLayer('route-' + selectedId);
+    routeShownId = null;
+    btn.textContent = '🛤 Ver histórico de rota';
+    btn.className = 'dp-route-btn';
+  } else {
+    if (routeShownId) removeLayer('route-' + routeShownId);
+    routeShownId = selectedId;
+    updateRouteLayer(selectedId);
+    btn.textContent = '✕ Ocultar rota';
+    btn.className = 'dp-route-btn active';
+  }
+}
+
+function updateRouteLayer(id) {
+  if (routeShownId !== id) return;
+  const sid    = 'route-' + id;
+  const coords = inspectors[id].trail;
+  if (coords.length < 2) return;
+  const geo = { type:'Feature', geometry:{ type:'LineString', coordinates: coords }};
+  if (map.getSource(sid)) { map.getSource(sid).setData(geo); return; }
+  map.addSource(sid, { type:'geojson', data: geo });
+  map.addLayer({ id: sid, type:'line', source: sid, paint:{
+    'line-color':'#14b8a6','line-width':3,'line-opacity':0.8,
+    'line-gradient': ['interpolate',['linear'],['line-progress'],
+      0, '#3b82f6', 0.5, '#14b8a6', 1, '#22c55e'
+    ]
+  }, layout:{ 'line-cap':'round','line-join':'round' }});
+}
+
+function removeLayer(id) {
+  if (map.getLayer(id))   map.removeLayer(id);
+  if (map.getSource(id))  map.removeSource(id);
+}
+
+// ════════════════════════════════════════════════════════
+// FIT ALL
+// ════════════════════════════════════════════════════════
+function fitAll() {
+  const ids = Object.keys(inspectors);
+  if (!ids.length) return;
+  if (ids.length === 1) { const d = inspectors[ids[0]].data; map.flyTo({ center:[d.lng,d.lat], zoom:13 }); return; }
+  const bounds = new mapboxgl.LngLatBounds();
+  ids.forEach(id => bounds.extend([inspectors[id].data.lng, inspectors[id].data.lat]));
+  map.fitBounds(bounds, { padding:80, maxZoom:14, duration:1200 });
+}
+
+// ════════════════════════════════════════════════════════
+// SIDEBAR / LIST
+// ════════════════════════════════════════════════════════
+function switchTab(tab) {
+  activeTab = tab;
+  document.getElementById('tab-inspectors').className = 'sb-tab' + (tab === 'inspectors' ? ' active' : '');
+  document.getElementById('tab-alerts').className     = 'sb-tab' + (tab === 'alerts'     ? ' active' : '');
+  document.getElementById('sb-list').style.display    = tab === 'inspectors' ? '' : 'none';
+  document.getElementById('alert-list').style.display = tab === 'alerts'     ? '' : 'none';
+}
+
+function renderList() {
+  const q    = (document.getElementById('search').value || '').toLowerCase();
+  const list = document.getElementById('sb-list');
+  list.querySelectorAll('.insp-card').forEach(e => e.remove());
+
+  const ids = Object.keys(inspectors).filter(id => {
+    if (!q) return true;
+    const d = inspectors[id].data;
+    return (d.inspectorName||'').toLowerCase().includes(q) || (d.inspectorId||id).toLowerCase().includes(q);
+  }).sort((a,b) => new Date(inspectors[b].data.timestamp) - new Date(inspectors[a].data.timestamp));
+
+  document.getElementById('sb-count').textContent = Object.keys(inspectors).length;
+
+  ids.forEach(id => {
+    const insp = inspectors[id];
+    const d    = insp.data;
+    const ago  = secAgo(d.timestamp);
+    const { label, cls } = statusOf(ago);
+    const alerted = insp.stopAlerted;
+    const ord  = insp.orders;
+    const pct  = ord.total > 0 ? Math.round((ord.done / ord.total) * 100) : 0;
+
+    const card = document.createElement('div');
+    card.className = 'insp-card' + (selectedId === id ? ' sel' : '') + (alerted ? ' alert' : '');
+    card.innerHTML = `
+      <div class="ic-row1">
+        <div class="ic-name">${d.inspectorName || id}</div>
+        <div class="ic-badge ${cls}">${label}</div>
+      </div>
+      <div class="ic-row2">
+        <div class="ic-id">${d.inspectorId || '—'}${d.zone ? ' · '+d.zone : ''}</div>
+        <div class="ic-orders">
+          <span class="ord-done">${ord.done}</span>
+          <span class="ord-sep">/</span>
+          <span class="ord-total">${ord.total}</span>
+          <span style="color:var(--faint);font-size:10px"> ordens</span>
+        </div>
+      </div>
+      <div class="ic-coords">${(d.lat||0).toFixed(5)}, ${(d.lng||0).toFixed(5)}</div>
+      <div class="ic-row3">
+        <div class="ic-ago">${agoLabel(ago)}</div>
+        <div class="ic-alert-tag">⚠ Parado</div>
+      </div>
+      <div class="ic-progress"><div class="ic-progress-fill" style="width:${pct}%"></div></div>
+    `;
+    card.onclick = (e) => {
+      if (e.target.classList.contains('ic-orders') || e.target.closest('.ic-orders')) {
+        openOrdersModal(id); return;
+      }
+      selectInspector(id);
+    };
+    list.appendChild(card);
+  });
+}
+
+// ════════════════════════════════════════════════════════
+// ORDERS MODAL
+// ════════════════════════════════════════════════════════
+function openOrdersModal(id) {
+  ordersEditId = id;
+  const insp   = inspectors[id];
+  document.getElementById('om-name').textContent = insp.data.inspectorName || id;
+  document.getElementById('om-total').value = insp.orders.total;
+  document.getElementById('om-done').value  = insp.orders.done;
+  document.getElementById('orders-modal').classList.remove('hidden');
+}
+
+function closeOrdersModal() {
+  document.getElementById('orders-modal').classList.add('hidden');
+  ordersEditId = null;
+}
+
+function saveOrders() {
+  if (!ordersEditId) return;
+  inspectors[ordersEditId].orders.total = parseInt(document.getElementById('om-total').value) || 0;
+  inspectors[ordersEditId].orders.done  = parseInt(document.getElementById('om-done').value)  || 0;
+  closeOrdersModal();
+  renderList();
+  if (selectedId === ordersEditId) updateDetail(inspectors[ordersEditId]);
+}
+
+// ════════════════════════════════════════════════════════
+// DETAIL PANEL
+// ════════════════════════════════════════════════════════
+function selectInspector(id) {
+  selectedId = id;
+  const insp = inspectors[id];
+  map.flyTo({ center:[insp.data.lng, insp.data.lat], zoom:14, speed:1.5 });
+  document.getElementById('detail').style.display = 'block';
+  // Reset route btn label if different inspector
+  if (routeShownId !== id) {
+    document.getElementById('dp-route-btn').textContent = '🛤 Ver histórico de rota';
+    document.getElementById('dp-route-btn').className   = 'dp-route-btn';
+  } else {
+    document.getElementById('dp-route-btn').textContent = '✕ Ocultar rota';
+    document.getElementById('dp-route-btn').className   = 'dp-route-btn active';
+  }
+  updateDetail(insp);
+  renderList();
+}
+
+function updateDetail(insp) {
+  const d   = insp.data;
+  const ago = secAgo(d.timestamp);
+  const { label, cls } = statusOf(ago);
+  const ord = insp.orders;
+  const pct = ord.total > 0 ? Math.round((ord.done / ord.total)*100) : 0;
+
+  document.getElementById('dp-avatar').textContent = (d.inspectorName||'I').charAt(0).toUpperCase();
+  document.getElementById('dp-name').textContent   = d.inspectorName || '—';
+  document.getElementById('dp-id-sub').textContent = (d.inspectorId || '—') + (d.zone ? ' · '+d.zone : '');
+  document.getElementById('dp-status').textContent = label;
+  document.getElementById('dp-status').className   = `dp-v ${cls==='live'?'g':cls==='slow'?'a':'r'}`;
+  document.getElementById('dp-lat').textContent    = (d.lat||0).toFixed(6);
+  document.getElementById('dp-lng').textContent    = (d.lng||0).toFixed(6);
+  document.getElementById('dp-acc').textContent    = d.accuracy ? `±${d.accuracy}m` : '—';
+  document.getElementById('dp-spd').textContent    = d.speed    ? `${d.speed} km/h`  : '—';
+  document.getElementById('dp-ago').textContent    = agoLabel(ago);
+  document.getElementById('dp-done').textContent   = ord.done;
+  document.getElementById('dp-total').textContent  = ord.total;
+  document.getElementById('dp-prog').style.width   = pct + '%';
+}
+
+function closeDetail() {
+  document.getElementById('detail').style.display = 'none';
+  if (routeShownId) { removeLayer('route-' + routeShownId); routeShownId = null; }
+  selectedId = null;
+  renderList();
+}
+
+// ════════════════════════════════════════════════════════
+// STATS
+// ════════════════════════════════════════════════════════
+function updateStats() {
+  const ids     = Object.keys(inspectors);
+  const total   = ids.length;
+  const active  = ids.filter(id => secAgo(inspectors[id].data.timestamp) < 120).length;
+  const stopped = ids.filter(id => inspectors[id].stopAlerted).length;
+  document.getElementById('s-total').textContent   = total;
+  document.getElementById('s-active').textContent  = active;
+  document.getElementById('s-stopped').textContent = stopped;
+}
+
+// ════════════════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════════════════
+function secAgo(ts) { return ts ? Math.floor((Date.now() - new Date(ts)) / 1000) : 9999; }
+function agoLabel(s) {
+  if (s < 10)   return 'agora';
+  if (s < 60)   return `há ${s}s`;
+  if (s < 3600) return `há ${Math.floor(s/60)}min`;
+  return `há ${Math.floor(s/3600)}h`;
+}
+function statusOf(s) {
+  if (s < 90)  return { label:'LIVE',   cls:'live'  };
+  if (s < 300) return { label:'LENTO',  cls:'slow'  };
+  return             { label:'PARADO', cls:'stale' };
+}
+
+// Refresh detail every 30s
+setInterval(() => {
+  if (selectedId && inspectors[selectedId]) updateDetail(inspectors[selectedId]);
+  updateStats();
+  renderList();
+}, 30000);
+
+// ════════════════════════════════════════════════════════
+// DEMO SIMULATION
+// ════════════════════════════════════════════════════════
+const DEMO = [
+  { id:'INS-001', name:'Carlos Oliveira', zone:'VA', lat:37.54,  lng:-77.43,  done:5,  total:9  },
+  { id:'INS-002', name:'Maria Santos',    zone:'MD', lat:39.01,  lng:-76.89,  done:3,  total:8  },
+  { id:'INS-003', name:'Pedro Lima',      zone:'PA', lat:39.98,  lng:-75.16,  done:7,  total:10 },
+  { id:'INS-004', name:'Ana Costa',       zone:'OH', lat:40.41,  lng:-82.00,  done:2,  total:7  },
+];
+
+let demoInterval = null;
+
+function runDemo() {
+  document.getElementById('empty-state').style.display = 'none';
+  DEMO.forEach(insp => {
+    handleLoc({ type:'location', inspectorId:insp.id, inspectorName:insp.name,
+      zone:insp.zone, lat:insp.lat, lng:insp.lng,
+      accuracy:12, speed:45, timestamp:new Date().toISOString() });
+    // Set demo orders
+    if (inspectors[insp.id]) inspectors[insp.id].orders = { total:insp.total, done:insp.done };
+  });
+  renderList();
+  fitAll();
+
+  // INS-004 will be "stopped" — simulate no updates
+  // only first 3 move
+  demoInterval = setInterval(() => {
+    [DEMO[0], DEMO[1], DEMO[2]].forEach(insp => {
+      insp.lat += (Math.random()-.5)*0.007;
+      insp.lng += (Math.random()-.5)*0.009;
+      handleLoc({ type:'location', inspectorId:insp.id, inspectorName:insp.name,
+        zone:insp.zone, lat:insp.lat, lng:insp.lng,
+        accuracy:Math.round(8+Math.random()*18),
+        speed:Math.round(25+Math.random()*65),
+        timestamp:new Date().toISOString() });
+    });
+  }, 3000);
+
+  // Trigger stop alert for INS-004 after 5s (simulating stopThresh)
+  setTimeout(() => triggerStopAlert('INS-004'), 5000);
+}
+</script>
+</body>
+</html>
