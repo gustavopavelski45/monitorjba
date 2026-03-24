@@ -481,17 +481,60 @@ body {
 <div class="safe-b"></div>
 
 <script>
-const SERVER_URL    = 'wss://jba-tracker-backend.onrender.com';
+const SERVER_URL    = 'wss://monitorjba.onrender.com';
 const SEND_INTERVAL = 30_000;
+const WS_RETRY_MS   = 5_000;   // reconnect every 5s (was 10s)
 
 let session = null, ws = null, watchId = null, sendTimer = null;
 let lastPos = null, sendCount = 0, logCount = 0, isTracking = false;
+let wakeLock = null;   // Screen Wake Lock API
 
-window.addEventListener('load', () => {
-  const saved = localStorage.getItem('jba_session');
-  if (saved) { session = JSON.parse(saved); showActive(); }
+// ── WAKE LOCK: keep screen on while tracking ──────────
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) {
+    addLog('warn', 'Wake Lock not supported on this device');
+    return;
+  }
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    addLog('info', 'Screen will stay on while tracking');
+    // Re-acquire if released (e.g. tab backgrounded then foregrounded)
+    wakeLock.addEventListener('release', () => {
+      if (isTracking) requestWakeLock();
+    });
+  } catch (e) {
+    addLog('warn', `Wake lock failed: ${e.message}`);
+  }
+}
+
+async function releaseWakeLock() {
+  if (wakeLock) {
+    await wakeLock.release();
+    wakeLock = null;
+  }
+}
+
+// Re-acquire wake lock when page becomes visible again
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && isTracking && !wakeLock) {
+    requestWakeLock();
+  }
 });
 
+// ── INIT ─────────────────────────────────────────────
+window.addEventListener('load', () => {
+  const saved = localStorage.getItem('jba_session');
+  if (saved) {
+    session = JSON.parse(saved);
+    showActive();
+    // Auto-start GPS after short delay (allow UI to render first)
+    setTimeout(() => {
+      if (!isTracking) startTracking();
+    }, 800);
+  }
+});
+
+// ── LOGIN ─────────────────────────────────────────────
 function doLogin() {
   const name = document.getElementById('inp_name').value.trim();
   const id   = document.getElementById('inp_id').value.trim().toUpperCase();
@@ -504,10 +547,15 @@ function doLogin() {
   session = { name, id, startedAt: new Date().toISOString() };
   localStorage.setItem('jba_session', JSON.stringify(session));
   showActive();
+  // Auto-start GPS right after login
+  setTimeout(() => {
+    if (!isTracking) startTracking();
+  }, 800);
 }
 
 function doSignOut() {
   stopTracking();
+  releaseWakeLock();
   if (ws) { ws.onclose = null; ws.close(); ws = null; }
   session = null; sendCount = 0; logCount = 0;
   localStorage.removeItem('jba_session');
@@ -526,27 +574,61 @@ function showActive() {
   addLog('info', `Session started · ${session.name}`);
 }
 
+// ── WEBSOCKET (retry every 5s) ─────────────────────────
 function connectWS() {
   try {
     ws = new WebSocket(SERVER_URL);
-    ws.onopen  = () => addLog('ok', 'Connected to JBA server');
-    ws.onclose = () => { addLog('warn', 'Connection lost — retrying in 10s…'); setTimeout(connectWS, 10000); };
+    ws.onopen  = () => {
+      addLog('ok', 'Connected to JBA server');
+      ws.send(JSON.stringify({ type:'register', ...session }));
+    };
+    ws.onclose = () => {
+      addLog('warn', `Connection lost — retrying in ${WS_RETRY_MS/1000}s…`);
+      setTimeout(connectWS, WS_RETRY_MS);
+    };
     ws.onerror = () => {};
-  } catch { addLog('warn', 'Server unreachable — will retry'); }
+  } catch {
+    addLog('warn', 'Server unreachable — retrying…');
+    setTimeout(connectWS, WS_RETRY_MS);
+  }
 }
 
+// ── TRACKING ──────────────────────────────────────────
 function toggleTracking() { isTracking ? stopTracking() : startTracking(); }
 
 function startTracking() {
-  if (!navigator.geolocation) { addLog('err', 'Geolocation not available'); return; }
+  if (!navigator.geolocation) {
+    addLog('err', 'Geolocation not available on this device');
+    return;
+  }
+
+  // Request wake lock to keep screen on
+  requestWakeLock();
+
   navigator.geolocation.getCurrentPosition(
-    pos => { lastPos = pos; updateGps(pos); sendLoc(); addLog('ok', 'GPS acquired — location sharing active'); },
-    err => addLog('err', `GPS denied: ${err.message}`),
+    pos => {
+      lastPos = pos;
+      updateGps(pos);
+      sendLoc();
+      addLog('ok', 'GPS acquired — location sharing active');
+    },
+    err => {
+      addLog('err', `GPS denied: ${err.message}`);
+      // Show user-friendly message
+      document.getElementById('toggleHint').textContent = '⚠ Allow location in iPhone Settings → Privacy → Location Services → Safari';
+    },
     { enableHighAccuracy: true, timeout: 15000 }
   );
-  watchId   = navigator.geolocation.watchPosition(pos => { lastPos = pos; updateGps(pos); }, () => {}, { enableHighAccuracy:true, maximumAge:10000, timeout:20000 });
+
+  watchId = navigator.geolocation.watchPosition(
+    pos => { lastPos = pos; updateGps(pos); },
+    err => addLog('warn', `GPS update: ${err.message}`),
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
+  );
+
   sendTimer = setInterval(sendLoc, SEND_INTERVAL);
   isTracking = true;
+
   document.getElementById('toggleBtn').classList.add('on');
   document.getElementById('toggleIcon').textContent  = '🟢';
   document.getElementById('toggleLabel').textContent = 'ACTIVE';
@@ -560,7 +642,9 @@ function startTracking() {
 function stopTracking() {
   if (watchId  !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
   if (sendTimer !== null) { clearInterval(sendTimer); sendTimer = null; }
+  releaseWakeLock();
   isTracking = false;
+
   document.getElementById('toggleBtn').classList.remove('on');
   document.getElementById('toggleIcon').textContent  = '📍';
   document.getElementById('toggleLabel').textContent = 'START';
@@ -572,35 +656,46 @@ function stopTracking() {
   addLog('warn', 'Location sharing paused');
 }
 
+// ── SEND LOCATION ──────────────────────────────────────
 function sendLoc() {
   if (!lastPos) return;
   const p = {
     type:'location', inspectorId:session.id, inspectorName:session.name,
     lat:lastPos.coords.latitude, lng:lastPos.coords.longitude,
     accuracy:Math.round(lastPos.coords.accuracy),
-    speed:lastPos.coords.speed ? Math.round(lastPos.coords.speed*3.6) : null,
+    speed:lastPos.coords.speed ? Math.round(lastPos.coords.speed * 3.6) : null,
     heading:lastPos.coords.heading, timestamp:new Date().toISOString()
   };
   const json = JSON.stringify(p);
-  if (ws && ws.readyState === WebSocket.OPEN) ws.send(json);
-  else fetch(SERVER_URL.replace(/^wss?:\/\//,'https://') + '/location', { method:'POST', headers:{'Content-Type':'application/json'}, body:json }).catch(()=>{});
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(json);
+  } else {
+    // HTTP fallback
+    fetch(SERVER_URL.replace(/^wss?:\/\//,'https://') + '/location', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:json
+    }).catch(()=>{});
+  }
   sendCount++;
   document.getElementById('gv_count').textContent = sendCount;
   document.getElementById('gv_sent').textContent  = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   document.querySelectorAll('.gps-cell-val').forEach(el => el.classList.remove('dim'));
-  addLog('ok', `Location sent · ±${Math.round(lastPos.coords.accuracy)}m accuracy`);
+  addLog('ok', `Location sent · ±${Math.round(lastPos.coords.accuracy)}ft`);
 }
 
+// ── UI HELPERS ─────────────────────────────────────────
 function updateGps(pos) {
   document.getElementById('gv_lat').textContent = pos.coords.latitude.toFixed(6);
   document.getElementById('gv_lng').textContent = pos.coords.longitude.toFixed(6);
   const tag = document.getElementById('accTag');
-  tag.textContent = `±${Math.round(pos.coords.accuracy)} m`;
+  tag.textContent = `±${Math.round(pos.coords.accuracy * 3.281)} ft`;
   tag.style.display = '';
 }
 
 function resetGps() {
-  ['gv_lat','gv_lng','gv_sent'].forEach(id => { document.getElementById(id).textContent='—'; document.getElementById(id).classList.add('dim'); });
+  ['gv_lat','gv_lng','gv_sent'].forEach(id => {
+    document.getElementById(id).textContent = '—';
+    document.getElementById(id).classList.add('dim');
+  });
   document.getElementById('gv_count').textContent = '0';
   document.getElementById('accTag').style.display = 'none';
 }
